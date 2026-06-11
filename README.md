@@ -1,8 +1,8 @@
 # mihomo-rule-inspector
 
-`mihomo-rule-inspector` 是一个用 Go 编写的本地桌面诊断工具，用来确认某个域名在 `mihomo` Meta 内核里实际命中了哪条规则、哪个策略组、最终走哪个节点。
+`mihomo-rule-inspector` 是一个用 Go 编写的本地桌面诊断工具，用来确认某个域名在 `mihomo`  内核里实际命中了哪条规则、哪个策略组、最终走哪个节点。
 
-它不依赖 Node.js、Electron 或外部 `curl`。当前版本定位为 Windows 64 位便携桌面工具，界面使用 Wails 承载，前端仍然是普通 HTML/CSS/JavaScript，并通过 `go:embed` 内嵌进单个 Go 可执行文件。
+当前版本定位为 Windows 64 位便携桌面工具，界面使用 Wails 承载，前端仍然是普通 HTML/CSS/JavaScript，并通过 `go:embed` 内嵌进单个 Go 可执行文件。
 
 ## 功能简介
 
@@ -61,20 +61,6 @@ mihomo-rule-inspector/
 
 - `data/config.json`
 
-同时会在同目录生成一份示例说明：
-
-- `data/config.example.json`
-
-示例：
-
-```text
-dist/
-  mihomo-rule-inspector.exe
-  data/
-    config.json
-    config.example.json
-```
-
 其中：
 
 - `config.json`：程序真正读取的配置文件，不带注释字段
@@ -119,7 +105,6 @@ external-controller-pipe: \\.\pipe\verge-mihomo
 - 优先读取 `/connections` 的 `rule`、`rulePayload`、`chains`
 - `/connections` 没有结果时，再回退到 `/logs?level=info` 做宽松解析
 - 批量检测、实时连接、日志辅助、规则弱匹配浏览
-- 设置页直接显示当前实际使用的 `config.json` 路径
 
 ## 依赖
 
@@ -136,35 +121,12 @@ external-controller-pipe: \\.\pipe\verge-mihomo
 - `mixed-port`
 - `log-level: info`
 
-可选但推荐：
-
-- `external-controller-cors`
-
-示例：
-
-```yaml
-external-controller: 127.0.0.1:9090
-secret: your-secret
-mixed-port: 10801
-log-level: info
-external-controller-cors:
-  allow-origins:
-    - "*"
-  allow-private-network: true
-```
-
 ## 构建
 
 推荐直接输出到 `dist/`：
 
 ```bash
 go build -tags desktop,production -ldflags="-w -s -H windowsgui" -o dist/mihomo-rule-inspector.exe ./cmd/mihomo-rule-inspector
-```
-
-Linux/macOS：
-
-```bash
-go build -tags desktop,production -ldflags="-w -s" -o dist/mihomo-rule-inspector ./cmd/mihomo-rule-inspector
 ```
 
 如果你想在 Windows 下隐藏控制台窗口，可以使用：
@@ -179,33 +141,6 @@ go build -tags desktop,production -ldflags="-w -s -H windowsgui" -o dist\mihomo-
 
 否则运行时会出现 “Wails applications will not build without the correct build tags” 报错。
 
-## 发布
-
-仓库内置了 GitHub Actions 工作流：
-
-- 当推送 `v*` 形式的 tag，例如 `v0.1.0`
-- 会自动在 `windows-latest` 上编译 `Windows x64`
-- 并把 `mihomo-rule-inspector.exe` 打包到 GitHub Release
-
-如果你想要便携模式，先创建 `dist/data/`：
-
-```bash
-mkdir -p dist/data
-```
-
-Windows PowerShell:
-
-```powershell
-New-Item -ItemType Directory -Force dist\data | Out-Null
-```
-
-## 运行
-
-```bash
-./dist/mihomo-rule-inspector.exe
-```
-
-启动后会直接打开桌面窗口。
 
 说明：
 
@@ -259,7 +194,5 @@ New-Item -ItemType Directory -Force dist\data | Out-Null
 - `GET /api/connections/ws`
 
 ## 说明
-
-- Secret 不会写死在源码中。
 - 如果目标站请求失败，只要 Mihomo 产生了连接或日志，工具仍会尽量给出规则判断。
 - 如果没有拿到证据，页面会提示排查方向：`mixed-port`、controller secret、缓存、`log-level` 等。
