@@ -37,10 +37,6 @@ func New(cfg config.AppConfig) *Server {
 	return s
 }
 
-func (s *Server) ListenAndServe() error {
-	return http.ListenAndServe(s.currentConfig().ListenAddr, s.withJSONLogging(s.mux))
-}
-
 func (s *Server) Handler() http.Handler {
 	return s.withJSONLogging(s.mux)
 }

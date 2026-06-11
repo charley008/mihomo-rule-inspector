@@ -135,12 +135,6 @@ func (s *Service) Run(ctx context.Context, req ProbeRequest) (Diagnosis, error) 
 		_ = s.client.FlushFakeIPCache(runCtx)
 	}
 
-	if net.ParseIP(host) == nil {
-		if dnsResult, dnsErr := s.client.QueryDNS(runCtx, host, "A"); dnsErr == nil {
-			diag.DNSResult = dnsResult
-		}
-	}
-
 	evidence := &evidenceStore{}
 	logConn, _ := s.client.OpenLogsStream(runCtx, "info")
 	connConn, _ := s.client.OpenConnectionsStream(runCtx)
@@ -194,6 +188,7 @@ func (s *Service) Run(ctx context.Context, req ProbeRequest) (Diagnosis, error) 
 
 	finalConnections, _ := s.client.GetConnections(runCtx)
 	evidence.ingestSnapshot(host, finalConnections)
+	s.closeProbeConnection(evidence)
 	cancel()
 	if logConn != nil {
 		_ = logConn.Close()
@@ -206,6 +201,24 @@ func (s *Service) Run(ctx context.Context, req ProbeRequest) (Diagnosis, error) 
 	diag = buildDiagnosis(diag, host, evidence, requestErr)
 	diag.DurationMs = time.Since(start).Milliseconds()
 	return diag, nil
+}
+
+func (s *Service) closeProbeConnection(evidence *evidenceStore) {
+	evidence.mu.Lock()
+	conn := cloneMap(evidence.connection)
+	evidence.mu.Unlock()
+	if len(conn) == 0 {
+		return
+	}
+
+	id := strings.TrimSpace(asString(conn["id"]))
+	if id == "" {
+		return
+	}
+
+	closeCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_ = s.client.CloseConnection(closeCtx, id)
 }
 
 func (s *Service) runHTTPProbe(ctx context.Context, host string, timeoutMs int, evidence *evidenceStore) error {
@@ -365,42 +378,24 @@ func buildDiagnosis(base Diagnosis, host string, evidence *evidenceStore, reques
 		fillFromConnection(&base, connection)
 	}
 
-	if base.RuleType == "" && len(rawLogs) > 0 {
-		for i := len(rawLogs) - 1; i >= 0; i-- {
-			parsed := ParseMatchLog(rawLogs[i])
-			if parsed.RuleType != "" || parsed.Policy != "" || parsed.Verdict != VerdictUnknown {
-				if base.RuleType == "" {
-					base.RuleType = parsed.RuleType
-				}
-				if base.RulePayload == "" {
-					base.RulePayload = parsed.RulePayload
-				}
-				if base.Policy == "" {
-					base.Policy = parsed.Policy
-				}
-				if base.FinalProxy == "" {
-					base.FinalProxy = parsed.FinalProxy
-				}
-				if len(base.Chains) == 0 {
-					base.Chains = parsed.Chains
-				}
-				if base.DstPort == 0 {
-					base.DstPort = parsed.DstPort
-				}
-				if base.Verdict == VerdictUnknown {
-					base.Verdict = parsed.Verdict
-				}
-				break
-			}
-		}
-	}
-
 	if base.Verdict == VerdictUnknown {
 		base.Verdict = inferVerdict(base.Chains, base.Policy, base.FinalProxy)
 	}
 
 	if requestErr != nil {
 		base.Error = requestErr.Error()
+	}
+
+	if len(base.RawConnection) == 0 {
+		if base.Error == "" {
+			base.Error = "本次没有拿到 /connections 证据，检测结果可能不完整，请重试。"
+		}
+		if len(base.Suggestions) == 0 {
+			base.Suggestions = []string{
+				"本次只拿到了日志，没有拿到 /connections 数据，所以策略组和最终节点可能不可靠。",
+				"建议重试一次；如果仍然为空，请检查 mixed-port、controller、secret，以及是否真的有流量经过 Mihomo。",
+			}
+		}
 	}
 
 	if base.Verdict == VerdictUnknown && len(base.RawLogs) == 0 && len(base.RawConnection) == 0 {

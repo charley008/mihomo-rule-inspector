@@ -143,7 +143,7 @@ function renderConnections() {
           ? metadata.chains
           : [];
       const displayChains = normalizeDisplayChains(
-        metadata.specialProxy || "",
+        metadata.specialProxy || rawChains[rawChains.length - 1] || "",
         item.outbound || rawChains[0] || "",
         rawChains,
       );
@@ -386,7 +386,24 @@ function saveHistory() {
   localStorage.setItem(HISTORY_KEY, JSON.stringify(state.history));
 }
 
+function shouldAddToHistory(result) {
+  const rawConnection = result?.rawConnection;
+  if (!rawConnection || typeof rawConnection !== "object") {
+    return false;
+  }
+  if (!Object.keys(rawConnection).length) {
+    return false;
+  }
+  if (String(result?.error || "").includes("没有拿到 /connections 证据")) {
+    return false;
+  }
+  return true;
+}
+
 function addHistory(result) {
+  if (!shouldAddToHistory(result)) {
+    return;
+  }
   const item = {
     target: result.target,
     normalizedHost: result.normalizedHost,
@@ -455,7 +472,6 @@ async function loadConfig() {
   byId("cfg-controller-pipe").value = state.config.controllerPipe || "";
   byId("cfg-secret").value = state.config.secret || "";
   byId("cfg-mixed").value = state.config.mixedProxyUrl || "";
-  byId("cfg-listen").value = state.config.listenAddr || "";
   byId("cfg-timeout").value = state.config.timeoutMs || 5000;
   byId("cfg-clear-dns").checked = !!state.config.clearDnsCacheBeforeProbe;
   byId("cfg-clear-fakeip").checked = !!state.config.clearFakeIpCacheBeforeProbe;
@@ -473,7 +489,6 @@ async function saveConfig() {
     controllerPipe: byId("cfg-controller-pipe").value.trim(),
     secret: byId("cfg-secret").value,
     mixedProxyUrl: byId("cfg-mixed").value.trim(),
-    listenAddr: byId("cfg-listen").value.trim(),
     timeoutMs: Number(byId("cfg-timeout").value || 5000),
     clearDnsCacheBeforeProbe: byId("cfg-clear-dns").checked,
     clearFakeIpCacheBeforeProbe: byId("cfg-clear-fakeip").checked,
@@ -500,8 +515,7 @@ async function testHealth() {
     const summary = result.ok
       ? `连接成功。\nController: ${result.controller?.displayName || "-"}`
       : `连接失败。\n${result.error || JSON.stringify(result.errors || {})}`;
-    const attemptsText = formatAttempts(result.attempts);
-    output.textContent = `${summary}${notice ? `\n\n提示：${notice}` : ""}${attemptsText ? `\n\n探测轨迹：\n${attemptsText}` : ""}`;
+    output.textContent = `${summary}${notice ? `\n\n提示：${notice}` : ""}`;
   } catch (error) {
     output.textContent = `测试连接失败。\n${error.message || String(error)}`;
   }

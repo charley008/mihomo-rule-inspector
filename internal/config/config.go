@@ -20,7 +20,6 @@ type AppConfig struct {
 	ControllerPipe              string `json:"controllerPipe"`
 	Secret                      string `json:"secret"`
 	MixedProxyURL               string `json:"mixedProxyUrl"`
-	ListenAddr                  string `json:"listenAddr"`
 	TimeoutMs                   int    `json:"timeoutMs"`
 	ClearDNSCacheBeforeProbe    bool   `json:"clearDnsCacheBeforeProbe"`
 	ClearFakeIPCacheBeforeProbe bool   `json:"clearFakeIpCacheBeforeProbe"`
@@ -32,7 +31,6 @@ func Default() AppConfig {
 		ControllerURL:               "http://127.0.0.1:9090",
 		ControllerPipe:              DefaultControllerPipe,
 		MixedProxyURL:               "http://127.0.0.1:10801",
-		ListenAddr:                  "127.0.0.1:8787",
 		TimeoutMs:                   5000,
 		ClearDNSCacheBeforeProbe:    false,
 		ClearFakeIPCacheBeforeProbe: false,
@@ -124,7 +122,6 @@ func configJSON() string {
   "controllerPipe": "\\\\.\\pipe\\verge-mihomo",
   "secret": "",
   "mixedProxyUrl": "http://127.0.0.1:10801",
-  "listenAddr": "127.0.0.1:8787",
   "timeoutMs": 5000,
   "clearDnsCacheBeforeProbe": false,
   "clearFakeIpCacheBeforeProbe": false
@@ -149,9 +146,6 @@ func configExampleJSON() string {
 
   "_comment_mixedProxyUrl": "mixed-port 地址。注意：探测流量始终走 mixed-port，不走 named pipe。",
   "mixedProxyUrl": "http://127.0.0.1:10801",
-
-  "_comment_listenAddr": "兼容模式保留字段。当前桌面版窗口模式下通常不会直接使用这个地址。",
-  "listenAddr": "127.0.0.1:8787",
 
   "_comment_timeoutMs": "单次探测超时，单位毫秒。",
   "timeoutMs": 5000,
@@ -178,9 +172,6 @@ func (c *AppConfig) applyDefaults() {
 	}
 	if c.MixedProxyURL == "" {
 		c.MixedProxyURL = def.MixedProxyURL
-	}
-	if c.ListenAddr == "" {
-		c.ListenAddr = def.ListenAddr
 	}
 	if c.TimeoutMs <= 0 {
 		c.TimeoutMs = def.TimeoutMs

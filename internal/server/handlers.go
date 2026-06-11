@@ -26,7 +26,6 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 			"controllerPipe":              cfg.ControllerPipe,
 			"secret":                      cfg.Secret,
 			"mixedProxyUrl":               cfg.MixedProxyURL,
-			"listenAddr":                  cfg.ListenAddr,
 			"timeoutMs":                   cfg.TimeoutMs,
 			"clearDnsCacheBeforeProbe":    cfg.ClearDNSCacheBeforeProbe,
 			"clearFakeIpCacheBeforeProbe": cfg.ClearFakeIPCacheBeforeProbe,
@@ -42,10 +41,6 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		cfg.ControllerURL = strings.TrimSpace(cfg.ControllerURL)
 		cfg.ControllerPipe = strings.TrimSpace(cfg.ControllerPipe)
 		cfg.MixedProxyURL = strings.TrimSpace(cfg.MixedProxyURL)
-		cfg.ListenAddr = strings.TrimSpace(cfg.ListenAddr)
-		if cfg.ListenAddr == "" {
-			cfg.ListenAddr = config.Default().ListenAddr
-		}
 		if err := s.updateConfig(cfg); err != nil {
 			s.writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 			return
@@ -57,7 +52,6 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 			"controllerPipe":              cfg.ControllerPipe,
 			"secret":                      cfg.Secret,
 			"mixedProxyUrl":               cfg.MixedProxyURL,
-			"listenAddr":                  cfg.ListenAddr,
 			"timeoutMs":                   cfg.TimeoutMs,
 			"clearDnsCacheBeforeProbe":    cfg.ClearDNSCacheBeforeProbe,
 			"clearFakeIpCacheBeforeProbe": cfg.ClearFakeIPCacheBeforeProbe,
@@ -161,20 +155,12 @@ func (s *Server) handleBatchProbe(w http.ResponseWriter, r *http.Request) {
 		if target == "" {
 			continue
 		}
-		item, itemErr := service.Run(r.Context(), probe.ProbeRequest{
+		item := runBatchProbeItem(r.Context(), service, probe.ProbeRequest{
 			Target:           target,
 			ClearDNSCache:    req.ClearDNSCache,
 			ClearFakeIPCache: req.ClearFakeIPCache,
 			TimeoutMs:        req.TimeoutMs,
 		})
-		if itemErr != nil {
-			item = probe.Diagnosis{
-				Target:      target,
-				Verdict:     probe.VerdictUnknown,
-				Error:       itemErr.Error(),
-				Suggestions: []string{"批量探测时当前项执行失败，请先检查上游配置是否可用。"},
-			}
-		}
 		results = append(results, item)
 	}
 
@@ -182,6 +168,53 @@ func (s *Server) handleBatchProbe(w http.ResponseWriter, r *http.Request) {
 		"results":     results,
 		"concurrency": 1,
 	})
+}
+
+func runBatchProbeItem(ctx context.Context, service *probe.Service, req probe.ProbeRequest) probe.Diagnosis {
+	const maxAttempts = 5
+
+	var last probe.Diagnosis
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		item, err := service.Run(ctx, req)
+		if err != nil {
+			last = probe.Diagnosis{
+				Target:      req.Target,
+				Verdict:     probe.VerdictUnknown,
+				Error:       err.Error(),
+				Suggestions: []string{"批量探测时当前项执行失败，请先检查上游配置是否可用。"},
+			}
+			break
+		}
+
+		last = item
+		if len(item.RawConnection) > 0 {
+			if attempt > 1 {
+				last.Suggestions = append(last.Suggestions,
+					fmt.Sprintf("批量检测在第 %d 次尝试时拿到了有效连接证据。", attempt),
+				)
+			}
+			return last
+		}
+
+		if attempt < maxAttempts {
+			select {
+			case <-ctx.Done():
+				last.Error = "批量检测已取消。"
+				return last
+			case <-time.After(300 * time.Millisecond):
+			}
+		}
+	}
+
+	if len(last.RawConnection) == 0 && last.Error == "" {
+		last.Error = fmt.Sprintf("连续 %d 次尝试后仍未拿到 /connections 证据。", maxAttempts)
+	}
+	if len(last.RawConnection) == 0 {
+		last.Suggestions = append(last.Suggestions,
+			"批量检测会在拿不到连接证据时自动重试，但当前项仍未成功，建议单独用快速检测再试一次。",
+		)
+	}
+	return last
 }
 
 func (s *Server) handleRules(w http.ResponseWriter, r *http.Request) {

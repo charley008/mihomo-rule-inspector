@@ -122,6 +122,18 @@ func (c *Client) GetConnections(ctx context.Context) (map[string]any, error) {
 	return c.getJSON(ctx, "/connections", nil)
 }
 
+func (c *Client) CloseConnection(ctx context.Context, id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil
+	}
+	return c.deleteEmpty(ctx, "/connections/"+url.PathEscape(id))
+}
+
+func (c *Client) CloseAllConnections(ctx context.Context) error {
+	return c.deleteEmpty(ctx, "/connections")
+}
+
 func (c *Client) QueryDNS(ctx context.Context, name, recordType string) (map[string]any, error) {
 	values := url.Values{}
 	values.Set("name", name)
@@ -175,6 +187,22 @@ func (c *Client) getJSON(ctx context.Context, path string, values url.Values) (m
 
 func (c *Client) postEmpty(ctx context.Context, path string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.resolve(path, nil), nil)
+	if err != nil {
+		return err
+	}
+	c.applyAuth(req.Header)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	return expectOK(resp)
+}
+
+func (c *Client) deleteEmpty(ctx context.Context, path string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.resolve(path, nil), nil)
 	if err != nil {
 		return err
 	}

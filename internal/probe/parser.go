@@ -8,8 +8,8 @@ import (
 
 var (
 	matchUsingPattern = regexp.MustCompile(`(?i)match(?:ed)?\s+(.+?)\s+using\s+(.+)$`)
-	ruleFragmentParen = regexp.MustCompile(`^\s*([A-Z0-9\-_]+)\s*\((.*)\)\s*$`)
-	ruleFragmentCSV   = regexp.MustCompile(`^\s*([A-Z0-9\-_]+)\s*,\s*(.+?)\s*$`)
+	ruleFragmentParen = regexp.MustCompile(`^\s*([A-Za-z0-9\-_]+)\s*\((.*)\)\s*$`)
+	ruleFragmentCSV   = regexp.MustCompile(`^\s*([A-Za-z0-9\-_]+)\s*,\s*(.+?)\s*$`)
 	portPattern       = regexp.MustCompile(`:(\d{1,5})\b`)
 )
 
@@ -52,10 +52,10 @@ func ParseMatchLog(line string) ParsedLog {
 func parseRuleFragment(fragment string) (string, string) {
 	fragment = strings.TrimSpace(fragment)
 	if match := ruleFragmentParen.FindStringSubmatch(fragment); len(match) == 3 {
-		return strings.ToUpper(strings.TrimSpace(match[1])), strings.TrimSpace(match[2])
+		return strings.TrimSpace(match[1]), strings.TrimSpace(match[2])
 	}
 	if match := ruleFragmentCSV.FindStringSubmatch(fragment); len(match) == 3 {
-		return strings.ToUpper(strings.TrimSpace(match[1])), strings.TrimSpace(match[2])
+		return strings.TrimSpace(match[1]), strings.TrimSpace(match[2])
 	}
 	return "", fragment
 }

@@ -4,10 +4,12 @@
 
 当前版本定位为 Windows 64 位便携桌面工具，界面使用 Wails 承载，前端仍然是普通 HTML/CSS/JavaScript，并通过 `go:embed` 内嵌进单个 Go 可执行文件。
 
+这是桌面窗口程序，不再提供单独的本地浏览器监听模式。
+
 ## 功能简介
 
 - 输入域名、URL 或 IP，主动通过 Mihomo `mixed-port` 发起探测
-- 同时监听 `/logs` 与 `/connections`，尽量还原真实命中规则
+- 以 `/connections` 为准，判断真实命中规则、策略组和最终节点
 - 结构化展示最终结论：`DIRECT / PROXY / REJECT / UNKNOWN`
 - 展示命中规则、规则载荷、策略组、最终节点、链路、连接信息
 - 支持批量检测、规则弱匹配浏览、实时连接、日志辅助查看
@@ -15,14 +17,14 @@
 
 ## 实现原理
 
-工具的核心思路不是只高亮日志，而是做一次“主动探测 + 证据归并”：
+工具的核心思路是做一次“主动探测 + 连接证据归并”：
 
 1. 归一化用户输入，提取目标 host
 2. 通过 Mihomo controller 查询配置、规则、连接和日志
 3. 使用 Go 原生 `net/http` 强制走 `mixed-port` 发起探测请求
 4. 在探测窗口内同时收集 `/connections` 和 `/logs?level=info`
 5. 优先使用 `/connections` 中的 `rule / rulePayload / chains`
-6. 如果连接里没有完整证据，再回退解析日志文本
+6. 日志只作为辅助证据展示，不再参与最终规则判断
 7. 返回结构化诊断结果，供前端卡片和表格展示
 
 ## 技术栈
@@ -99,7 +101,7 @@ external-controller-pipe: \\.\pipe\verge-mihomo
 - 后端直接请求 Mihomo controller API，避免浏览器 CORS 问题
 - 使用 Go 原生 `net/http`，强制经由 Mihomo `mixed-port` 发起探测
 - 优先读取 `/connections` 的 `rule`、`rulePayload`、`chains`
-- `/connections` 没有结果时，再回退到 `/logs?level=info` 做宽松解析
+- 日志只保留为辅助排障证据，不再用于最终命中判断
 - 批量检测、实时连接、日志辅助、规则弱匹配浏览
 
 ## 依赖
@@ -137,12 +139,6 @@ go build -tags desktop,production -ldflags="-w -s -H windowsgui" -o dist\mihomo-
 
 否则运行时会出现 “Wails applications will not build without the correct build tags” 报错。
 
-
-说明：
-
-- `listenAddr` 目前作为兼容模式保留字段保存在配置中
-- 当前桌面窗口模式下，通常不需要手动访问浏览器地址
-
 ## 页面说明
 
 ### 快速检测
@@ -152,7 +148,7 @@ go build -tags desktop,production -ldflags="-w -s -H windowsgui" -o dist\mihomo-
 - 通过 Mihomo `mixed-port` 主动发起：
   - `https://host/?mihomo_probe=<timestamp>`
   - 失败后回退 `http://host/?mihomo_probe=<timestamp>`
-- 收集 3 到 5 秒内相关的 logs 和 connections
+- 收集 3 到 5 秒内相关的 connections，日志仅作辅助展示
 
 ### 批量检测
 
@@ -174,7 +170,7 @@ go build -tags desktop,production -ldflags="-w -s -H windowsgui" -o dist\mihomo-
 
 - 调用 `/rules` 和 `/providers/rules`
 - 对 `DOMAIN`、`DOMAIN-SUFFIX`、`DOMAIN-KEYWORD`、`DOMAIN-WILDCARD`、`DOMAIN-REGEX`、`MATCH` 做弱匹配提示
-- 最终实际命中结果仍以 `/connections` 和 `/logs` 为准
+- 最终实际命中结果只以 `/connections` 为准
 
 ## 后端 API
 
@@ -190,5 +186,5 @@ go build -tags desktop,production -ldflags="-w -s -H windowsgui" -o dist\mihomo-
 - `GET /api/connections/ws`
 
 ## 说明
-- 如果目标站请求失败，只要 Mihomo 产生了连接或日志，工具仍会尽量给出规则判断。
+- 如果目标站请求失败，只要 Mihomo 产生了连接，工具仍会尽量给出规则判断。
 - 如果没有拿到证据，页面会提示排查方向：`mixed-port`、controller secret、缓存、`log-level` 等。
