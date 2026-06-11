@@ -62,10 +62,11 @@ function renderQuickResult(result) {
   wrap.innerHTML = "";
   const tpl = byId("result-template");
   const node = tpl.content.firstElementChild.cloneNode(true);
+  const statusLabel = formatStatusLabel(result);
   node.classList.add((result.verdict || "unknown").toLowerCase());
   node.querySelector(".result-title").textContent = result.target || "未提供目标";
   node.querySelector(".result-host").textContent = result.normalizedHost || "-";
-  node.querySelector(".verdict").textContent = result.verdict || "UNKNOWN";
+  node.querySelector(".verdict").textContent = statusLabel;
   node.querySelector(".verdict").classList.add((result.verdict || "unknown").toLowerCase());
   node.querySelector(".rule-type").textContent = result.ruleType || "-";
   node.querySelector(".rule-payload").textContent = result.rulePayload || "-";
@@ -104,12 +105,12 @@ function renderBatchResults() {
   tbody.innerHTML = "";
   state.batchResults.forEach((item) => {
     const ruleText = formatRuleLabel(item.ruleType, item.rulePayload);
+    const statusLabel = formatStatusLabel(item);
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${escapeHtml(item.normalizedHost || item.target || "-")}</td>
-      <td><span class="badge ${(item.verdict || "unknown").toLowerCase()}">${escapeHtml(item.verdict || "UNKNOWN")}</span></td>
+      <td><span class="badge ${(item.verdict || "unknown").toLowerCase()}">${escapeHtml(statusLabel)}</span></td>
       <td>${escapeHtml(ruleText)}</td>
-      <td>${escapeHtml(item.policy || "-")}</td>
       <td>${escapeHtml(item.finalProxy || "-")}</td>
       <td>${escapeHtml(item.durationMs || 0)} ms</td>
       <td>${escapeHtml(item.error || "")}</td>
@@ -188,6 +189,24 @@ function formatRuleLabel(ruleType, rulePayload) {
     return `${type}(${payload})`;
   }
   return type || payload || "-";
+}
+
+function formatStatusLabel(result) {
+  const verdict = String(result?.verdict || "").trim().toUpperCase();
+  const policy = String(result?.policy || "").trim();
+  if (verdict === "PROXY" && policy) {
+    return policy;
+  }
+  return verdict || policy || "UNKNOWN";
+}
+
+function formatHistoryNode(item) {
+  const finalProxy = String(item?.finalProxy || "").trim();
+  if (finalProxy) {
+    return finalProxy;
+  }
+  const verdict = String(item?.verdict || "").trim().toUpperCase();
+  return verdict || "-";
 }
 
 function normalizeDisplayChains(policy, finalProxy, rawChains = []) {
@@ -350,6 +369,8 @@ function addHistory(result) {
     policy: result.policy,
     finalProxy: result.finalProxy,
     chains: result.chains || [],
+    network: result.network || "",
+    dstPort: result.dstPort || 0,
     durationMs: result.durationMs,
     error: result.error || "",
     rawLogs: result.rawLogs || [],
@@ -372,16 +393,19 @@ function renderHistory() {
   }
 
   state.history.forEach((item, index) => {
+    const ruleText = formatRuleLabel(item.ruleType, item.rulePayload);
+    const statusLabel = formatStatusLabel(item);
+    const nodeLabel = formatHistoryNode(item);
     const button = document.createElement("button");
     button.className = "history-item";
     button.innerHTML = `
       <div class="history-main">
         <strong>${escapeHtml(item.normalizedHost || item.target || "-")}</strong>
-        <span class="badge ${(item.verdict || "unknown").toLowerCase()}">${escapeHtml(item.verdict || "UNKNOWN")}</span>
+        <span class="badge ${(item.verdict || "unknown").toLowerCase()}">${escapeHtml(statusLabel)}</span>
       </div>
       <div class="history-meta">
-        <span>${escapeHtml(item.ruleType || "-")} ${escapeHtml(item.rulePayload || "")}</span>
-        <span>${escapeHtml(item.policy || "-")} / ${escapeHtml(item.finalProxy || "-")}</span>
+        <span>${escapeHtml(ruleText)}</span>
+        <span>${escapeHtml(nodeLabel)}</span>
         <span>${escapeHtml(item.durationMs || 0)} ms</span>
       </div>
     `;

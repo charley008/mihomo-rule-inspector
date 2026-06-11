@@ -65,11 +65,13 @@
         <section class="panel" data-panel="batch">
           <div class="section-head">
             <h1>批量检测</h1>
-            <p>逐个串行探测，适合确认多条域名的真实出口。</p>
+            <p>逐个串行探测，适合确认多条域名的真实出口，一行一个域名。</p>
           </div>
           <div class="card form-card">
             <label for="batch-targets">目标列表</label>
-            <textarea id="batch-targets" rows="10" placeholder="一行一个域名"></textarea>
+            <textarea id="batch-targets" rows="10" placeholder="一行一个域名">www.qq.com
+www.google.com
+www.chatgpt.com</textarea>
             <div class="row">
               <button id="batch-probe-btn" class="primary">开始批量检测</button>
               <button id="batch-copy-btn">复制结果</button>
@@ -82,9 +84,8 @@
                 <thead>
                   <tr>
                     <th>域名</th>
-                    <th>结果</th>
-                    <th>命中规则</th>
                     <th>策略组</th>
+                    <th>规则类型/内容</th>
                     <th>最终节点</th>
                     <th>耗时</th>
                     <th>错误</th>
@@ -227,8 +228,8 @@
           <div class="badge verdict"></div>
         </div>
         <div class="result-grid">
-          <div><span>命中规则</span><strong class="rule-type">-</strong></div>
-          <div><span>Rule Payload</span><strong class="rule-payload">-</strong></div>
+          <div><span>规则类型</span><strong class="rule-type">-</strong></div>
+          <div><span>规则内容</span><strong class="rule-payload">-</strong></div>
           <div><span>策略组</span><strong class="policy">-</strong></div>
           <div><span>最终节点</span><strong class="final-proxy">-</strong></div>
           <div><span>Chains</span><strong class="chains">-</strong></div>
