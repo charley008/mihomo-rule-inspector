@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>mihomo-rule-inspector</title>
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div class="window-chrome" style="--wails-draggable: drag">
+      <div class="window-drag-zone"></div>
+      <div class="window-actions" style="--wails-draggable: no-drag">
+        <button id="window-min-btn" class="window-btn" type="button" aria-label="最小化">−</button>
+        <button id="window-max-btn" class="window-btn" type="button" aria-label="最大化">□</button>
+        <button id="window-close-btn" class="window-btn danger" type="button" aria-label="关闭">×</button>
+      </div>
+    </div>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div>
+          <div class="brand">mihomo-rule-inspector</div>
+          <p class="muted">本地诊断面板，用来查看目标最终命中的规则、策略组和节点。</p>
+        </div>
+        <nav class="nav">
+          <button class="nav-btn active" data-tab="quick">快速检测</button>
+          <button class="nav-btn" data-tab="batch">批量检测</button>
+          <button class="nav-btn" data-tab="connections">实时连接</button>
+          <button class="nav-btn" data-tab="logs">日志</button>
+          <button class="nav-btn" data-tab="rules">规则浏览</button>
+          <button class="nav-btn" data-tab="settings">设置</button>
+        </nav>
+      </aside>
+
+      <main class="main">
+        <section class="panel active" data-panel="quick">
+          <div class="section-head">
+            <h1>快速检测</h1>
+            <p>输入域名、URL 或 IP，工具会主动通过 Mihomo mixed-port 发起探测。</p>
+          </div>
+          <div class="card form-card">
+            <label for="quick-target">目标</label>
+            <div class="row">
+              <input id="quick-target" type="text" value="www.google.com" placeholder="例如 api.openai.com 或 https://api.openai.com/v1" />
+              <button id="quick-probe-btn" class="primary">开始检测</button>
+            </div>
+            <div class="options">
+              <label><input id="quick-clear-dns" type="checkbox" /> 检测前清理 DNS cache</label>
+              <label><input id="quick-clear-fakeip" type="checkbox" /> 检测前清理 fake-ip cache</label>
+              <label>超时(ms)<input id="quick-timeout" type="number" min="1000" step="500" value="5000" /></label>
+            </div>
+            <div id="quick-progress" class="hint" hidden>正在检测，请稍候...</div>
+            <div id="quick-progress-bar" class="progress-bar" hidden><span></span></div>
+          </div>
+          <div id="quick-result" class="result-wrap"></div>
+          <div class="card">
+            <div class="section-subhead">
+              <h2>历史记录</h2>
+              <button id="history-clear-btn">清空历史</button>
+            </div>
+            <div id="history-list" class="history-list"></div>
+          </div>
+        </section>
+
+        <section class="panel" data-panel="batch">
+          <div class="section-head">
+            <h1>批量检测</h1>
+            <p>逐个串行探测，适合确认多条域名的真实出口。</p>
+          </div>
+          <div class="card form-card">
+            <label for="batch-targets">目标列表</label>
+            <textarea id="batch-targets" rows="10" placeholder="一行一个域名"></textarea>
+            <div class="row">
+              <button id="batch-probe-btn" class="primary">开始批量检测</button>
+              <button id="batch-copy-btn">复制结果</button>
+              <button id="batch-export-btn">导出 JSON</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="table-wrap">
+              <table id="batch-table">
+                <thead>
+                  <tr>
+                    <th>域名</th>
+                    <th>结果</th>
+                    <th>命中规则</th>
+                    <th>策略组</th>
+                    <th>最终节点</th>
+                    <th>耗时</th>
+                    <th>错误</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel" data-panel="connections">
+          <div class="section-head">
+            <h1>实时连接</h1>
+            <p>直接查看当前 Mihomo 连接、规则和链路。</p>
+          </div>
+          <div class="card form-card">
+            <div class="row">
+              <input id="connections-filter" type="text" placeholder="按 host 过滤" />
+              <button id="connections-refresh-btn">刷新快照</button>
+            </div>
+            <div id="connections-status" class="hint">自动刷新中...</div>
+          </div>
+          <div class="card">
+            <div class="table-wrap">
+              <table id="connections-table">
+                <thead>
+                  <tr>
+                    <th>主机</th>
+                    <th>下载量</th>
+                    <th>上传量</th>
+                    <th>下载速度</th>
+                    <th>上传速度</th>
+                    <th>链路</th>
+                    <th>规则</th>
+                    <th>连接时间</th>
+                    <th>目标地址</th>
+                    <th>类型</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel" data-panel="logs">
+          <div class="section-head">
+            <h1>日志</h1>
+            <p>辅助观察 match、using、DIRECT、REJECT 等关键词。</p>
+          </div>
+          <div class="card form-card">
+            <div class="row">
+              <input id="logs-filter" type="text" placeholder="关键词过滤" />
+              <button id="logs-clear-btn">清空</button>
+            </div>
+          </div>
+          <div id="logs-view" class="card log-view"></div>
+        </section>
+
+        <section class="panel" data-panel="rules">
+          <div class="section-head">
+            <h1>规则浏览</h1>
+            <p>前端只做弱匹配提示，最终实际命中仍以 logs 和 connections 为准。</p>
+          </div>
+          <div class="card form-card">
+            <div class="row">
+              <input id="rules-target" type="text" placeholder="输入域名做候选匹配" />
+              <button id="rules-load-btn">加载规则</button>
+            </div>
+            <div id="rules-status" class="hint">切换到规则浏览时会自动加载规则，也可以手动刷新。</div>
+          </div>
+          <div class="card">
+            <div id="rules-candidates" class="chips"></div>
+            <div class="table-wrap">
+              <table id="rules-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Type</th>
+                    <th>Payload</th>
+                    <th>Policy</th>
+                    <th>匹配提示</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel" data-panel="settings">
+          <div class="section-head">
+            <h1>设置</h1>
+            <p>Controller 支持 Auto、HTTP Controller、Windows Pipe 三种模式。</p>
+          </div>
+          <div class="card form-card settings-grid">
+            <label>
+              Controller 模式
+              <select id="cfg-controller-mode">
+                <option value="auto">Auto</option>
+                <option value="http">HTTP Controller</option>
+                <option value="windows_pipe">Windows Pipe</option>
+              </select>
+            </label>
+            <label>HTTP Controller 地址<input id="cfg-controller" type="text" placeholder="http://127.0.0.1:9090" /></label>
+            <label>Windows Pipe 名称<input id="cfg-controller-pipe" type="text" placeholder="\\.\pipe\verge-mihomo" /></label>
+            <label>Secret<input id="cfg-secret" type="password" placeholder="Bearer secret" /></label>
+            <label>Mixed Proxy 地址<input id="cfg-mixed" type="text" placeholder="http://127.0.0.1:10801" /></label>
+            <label>兼容模式监听地址（桌面版当前未使用）<input id="cfg-listen" type="text" placeholder="127.0.0.1:8787" /></label>
+            <label>默认超时(ms)<input id="cfg-timeout" type="number" min="1000" step="500" /></label>
+            <label><input id="cfg-clear-dns" type="checkbox" /> 默认检测前清理 DNS cache</label>
+            <label><input id="cfg-clear-fakeip" type="checkbox" /> 默认检测前清理 fake-ip cache</label>
+            <div class="path-box">
+              <strong>配置文件路径</strong>
+              <code id="cfg-path">-</code>
+            </div>
+            <div class="path-box">
+              <strong>当前 Controller</strong>
+              <code id="cfg-controller-active">-</code>
+            </div>
+            <div class="row">
+              <button id="cfg-save-btn" class="primary">保存配置</button>
+              <button id="cfg-test-btn">测试连接</button>
+            </div>
+            <div id="health-result" class="hint"></div>
+            <div id="save-result" class="hint" hidden>配置已保存。</div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <template id="result-template">
+      <div class="result-card">
+        <div class="result-header">
+          <div>
+            <div class="result-title"></div>
+            <div class="result-host"></div>
+          </div>
+          <div class="badge verdict"></div>
+        </div>
+        <div class="result-grid">
+          <div><span>命中规则</span><strong class="rule-type">-</strong></div>
+          <div><span>Rule Payload</span><strong class="rule-payload">-</strong></div>
+          <div><span>策略组</span><strong class="policy">-</strong></div>
+          <div><span>最终节点</span><strong class="final-proxy">-</strong></div>
+          <div><span>Chains</span><strong class="chains">-</strong></div>
+          <div><span>网络</span><strong class="network">-</strong></div>
+          <div><span>目标端口</span><strong class="dst-port">-</strong></div>
+          <div><span>耗时</span><strong class="duration">-</strong></div>
+        </div>
+        <div class="suggestions"></div>
+        <details class="details-block">
+          <summary>原始证据</summary>
+          <pre class="raw-output"></pre>
+        </details>
+      </div>
+    </template>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

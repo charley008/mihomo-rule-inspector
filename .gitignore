@@ -1,0 +1,5 @@
+*.exe
+*.out
+dist/
+bin/
+data/

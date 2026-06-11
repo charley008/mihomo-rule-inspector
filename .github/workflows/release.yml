@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build Windows x64
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          go build -tags desktop,production -ldflags="-w -s -H windowsgui" -o dist\mihomo-rule-inspector.exe .\cmd\mihomo-rule-inspector
+
+      - name: Package Release
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}"
+          $packageDir = "dist\mihomo-rule-inspector_${version}_windows_amd64"
+          New-Item -ItemType Directory -Force $packageDir | Out-Null
+          Copy-Item dist\mihomo-rule-inspector.exe $packageDir\
+          Copy-Item README.md $packageDir\
+          Compress-Archive -Path "$packageDir\*" -DestinationPath "dist\mihomo-rule-inspector_${version}_windows_amd64.zip" -Force
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/mihomo-rule-inspector_${{ github.ref_name }}_windows_amd64.zip
