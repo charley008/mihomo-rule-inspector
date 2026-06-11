@@ -72,19 +72,15 @@ mihomo-rule-inspector/
 
 工具支持三种 controller 模式：
 
-- `auto`
 - `http`
 - `windows_pipe`
 
-`auto` 模式下会优先尝试 HTTP controller：
+现在程序只测试你明确填写的 controller：
 
-- `http://127.0.0.1:9097`
-- `http://127.0.0.1:9090`
-- `http://127.0.0.1:9091-9100`
+- `http` 模式：只测试 `controllerUrl`
+- `windows_pipe` 模式：只测试 `controllerPipe`
 
-如果 HTTP 全部失败，并且当前系统是 Windows，则继续尝试：
-
-- `\\.\pipe\verge-mihomo`
+旧版本配置里的 `auto` 会按 `http` 兼容处理，但不再自动扫描 `9097`、`9090` 或其他端口。
 
 这可以兼容 Clash Verge Dev/Rev 常见的运行时配置：
 

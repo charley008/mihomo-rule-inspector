@@ -240,35 +240,31 @@ func (c *Client) applyAuth(header http.Header) {
 
 func resolveController(cfg config.AppConfig) (*resolvedController, error) {
 	mode := strings.TrimSpace(cfg.ControllerMode)
-	if mode == "" {
-		mode = config.ControllerModeAuto
+	if mode == "" || mode == config.ControllerModeAuto {
+		mode = config.ControllerModeHTTP
 	}
 
 	secrets := buildSecretCandidates(cfg.Secret)
 	allAttempts := make([]ControllerAttempt, 0, 24)
 
-	if mode == config.ControllerModeAuto || mode == config.ControllerModeHTTP {
+	if mode == config.ControllerModeHTTP {
 		resolved, err := tryHTTPControllers(cfg, mode, secrets)
 		allAttempts = append(allAttempts, resolvedAttempts(resolved)...)
 		if err == nil {
 			resolved.attempts = allAttempts
 			return resolved, nil
 		}
-		if mode == config.ControllerModeHTTP {
-			return nil, err
-		}
+		return nil, err
 	}
 
-	if mode == config.ControllerModeAuto || mode == config.ControllerModeWindowsPipe {
+	if mode == config.ControllerModeWindowsPipe {
 		resolved, err := tryPipeController(cfg, mode, secrets)
 		allAttempts = append(allAttempts, resolvedAttempts(resolved)...)
 		if err == nil {
 			resolved.attempts = allAttempts
 			return resolved, nil
 		}
-		if mode == config.ControllerModeWindowsPipe {
-			return nil, err
-		}
+		return nil, err
 	}
 
 	return nil, fmt.Errorf("unable to connect to Mihomo controller in %s mode", mode)
@@ -278,7 +274,7 @@ func tryHTTPControllers(cfg config.AppConfig, mode string, secrets []secretCandi
 	var errs []string
 	attempts := make([]ControllerAttempt, 0, 24)
 
-	for _, rawURL := range httpCandidates(cfg.ControllerURL, mode == config.ControllerModeAuto) {
+	for _, rawURL := range httpCandidates(cfg.ControllerURL) {
 		baseURL, err := url.Parse(strings.TrimRight(rawURL, "/"))
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("%s: %v", rawURL, err))
@@ -418,9 +414,9 @@ func probeVersion(ctx context.Context, client *http.Client, baseURL *url.URL, se
 	return expectOK(resp)
 }
 
-func httpCandidates(configURL string, includeScan bool) []string {
+func httpCandidates(configURL string) []string {
 	seen := map[string]bool{}
-	out := make([]string, 0, 16)
+	out := make([]string, 0, 4)
 	add := func(raw string) {
 		raw = strings.TrimSpace(raw)
 		if raw == "" || seen[raw] {
@@ -431,31 +427,21 @@ func httpCandidates(configURL string, includeScan bool) []string {
 	}
 
 	add(configURL)
-	add("http://127.0.0.1:9097")
-	add("http://127.0.0.1:9090")
-	if includeScan {
-		for port := 9091; port <= 9100; port++ {
-			add(fmt.Sprintf("http://127.0.0.1:%d", port))
-		}
-	}
 	return out
 }
 
 func buildSecretCandidates(userSecret string) []secretCandidate {
-	seen := map[string]bool{}
-	out := make([]secretCandidate, 0, 3)
-	add := func(value, source string) {
-		if seen[value] {
-			return
-		}
-		seen[value] = true
-		out = append(out, secretCandidate{value: value, source: source})
+	userSecret = strings.TrimSpace(userSecret)
+	if userSecret != "" {
+		return []secretCandidate{{
+			value:  userSecret,
+			source: "user",
+		}}
 	}
-
-	add(strings.TrimSpace(userSecret), "user")
-	add("set-your-secret", "fallback-default")
-	add("", "empty")
-	return out
+	return []secretCandidate{{
+		value:  "",
+		source: "empty",
+	}}
 }
 
 func expectOK(resp *http.Response) error {

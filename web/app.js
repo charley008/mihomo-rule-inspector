@@ -335,8 +335,11 @@ function renderControllerInfo(controller) {
 }
 
 function formatAttempts(attempts = []) {
+  if (!Array.isArray(attempts)) {
+    return "";
+  }
   if (!attempts.length) {
-    return "未返回探测轨迹。";
+    return "";
   }
   return attempts
     .map((attempt, index) => {
@@ -345,6 +348,30 @@ function formatAttempts(attempts = []) {
       return `${index + 1}. [${attempt.kind}] ${attempt.target} ${secret} ${status}${attempt.message ? ` | ${attempt.message}` : ""}`;
     })
     .join("\n");
+}
+
+function buildHealthNotice(result) {
+  const attempts = Array.isArray(result?.attempts) ? result.attempts : [];
+  const userFailures = attempts.filter(
+    (attempt) =>
+      attempt.secretSource === "user" &&
+      !attempt.success &&
+      /401|403|unauthorized|forbidden|bearer|secret/i.test(String(attempt.message || "")),
+  );
+
+  if (userFailures.length > 0) {
+    const sample = userFailures[0];
+    return `你填写的 Secret 测试失败：${sample.message}`;
+  }
+
+  const fallbackSuccess = attempts.find(
+    (attempt) => attempt.success && attempt.secretSource && attempt.secretSource !== "user",
+  );
+  if (fallbackSuccess) {
+    return `当前连接成功，但实际使用的是 ${fallbackSuccess.secretSource} secret，而不是你填写的 secret。`;
+  }
+
+  return "";
 }
 
 function loadHistory() {
@@ -464,12 +491,20 @@ async function saveConfig() {
 }
 
 async function testHealth() {
-  const result = await api("/api/health");
-  renderControllerInfo(result.controller);
-  const summary = result.ok
-    ? `连接成功。\nController: ${result.controller?.displayName || "-"}`
-    : `连接失败。\n${result.error || JSON.stringify(result.errors || {})}`;
-  byId("health-result").textContent = `${summary}\n\n探测轨迹：\n${formatAttempts(result.attempts)}`;
+  const output = byId("health-result");
+  output.textContent = "正在测试连接...";
+  try {
+    const result = await api("/api/health");
+    renderControllerInfo(result.controller);
+    const notice = buildHealthNotice(result);
+    const summary = result.ok
+      ? `连接成功。\nController: ${result.controller?.displayName || "-"}`
+      : `连接失败。\n${result.error || JSON.stringify(result.errors || {})}`;
+    const attemptsText = formatAttempts(result.attempts);
+    output.textContent = `${summary}${notice ? `\n\n提示：${notice}` : ""}${attemptsText ? `\n\n探测轨迹：\n${attemptsText}` : ""}`;
+  } catch (error) {
+    output.textContent = `测试连接失败。\n${error.message || String(error)}`;
+  }
 }
 
 async function quickProbe() {

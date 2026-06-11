@@ -28,7 +28,7 @@ type AppConfig struct {
 
 func Default() AppConfig {
 	return AppConfig{
-		ControllerMode:              ControllerModeAuto,
+		ControllerMode:              ControllerModeHTTP,
 		ControllerURL:               "http://127.0.0.1:9090",
 		ControllerPipe:              DefaultControllerPipe,
 		MixedProxyURL:               "http://127.0.0.1:10801",
@@ -119,7 +119,7 @@ func ensureFile(path, content string) error {
 
 func configJSON() string {
 	return `{
-  "controllerMode": "auto",
+  "controllerMode": "http",
   "controllerUrl": "http://127.0.0.1:9090",
   "controllerPipe": "\\\\.\\pipe\\verge-mihomo",
   "secret": "",
@@ -135,16 +135,16 @@ func configJSON() string {
 func configExampleJSON() string {
 	return `{
   "_comment": "这是示例配置文件。程序真正读取的是同目录下的 config.json。",
-  "_comment_controllerMode": "controller 模式，可选 auto、http、windows_pipe。",
-  "controllerMode": "auto",
+  "_comment_controllerMode": "controller 模式，可选 http、windows_pipe。旧版本里的 auto 会按 http 兼容处理，但不再自动扫描端口。",
+  "controllerMode": "http",
 
-  "_comment_controllerUrl": "HTTP controller 地址。auto 模式下会优先尝试这里，再扫 127.0.0.1:9097、9090、9091-9100。",
+  "_comment_controllerUrl": "HTTP controller 地址。程序只测试你这里填写的地址，不再自动扫描 9097、9090 或其他端口。",
   "controllerUrl": "http://127.0.0.1:9090",
 
   "_comment_controllerPipe": "Windows Pipe controller 名称。Clash Verge Dev/Rev 常见值是 \\\\.\\pipe\\verge-mihomo。",
   "controllerPipe": "\\\\.\\pipe\\verge-mihomo",
 
-  "_comment_secret": "Mihomo 的 secret。程序会依次尝试：你填写的 secret、set-your-secret、空 secret。",
+  "_comment_secret": "Mihomo 的 secret。程序只测试你当前填写的值；如果留空，就只按空 secret 测试一次。",
   "secret": "",
 
   "_comment_mixedProxyUrl": "mixed-port 地址。注意：探测流量始终走 mixed-port，不走 named pipe。",
@@ -167,7 +167,7 @@ func configExampleJSON() string {
 
 func (c *AppConfig) applyDefaults() {
 	def := Default()
-	if c.ControllerMode == "" {
+	if c.ControllerMode == "" || c.ControllerMode == ControllerModeAuto {
 		c.ControllerMode = def.ControllerMode
 	}
 	if c.ControllerURL == "" {
