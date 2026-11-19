@@ -166,7 +166,8 @@ func details(c *ui.Context, value string, height float32) {
 func (s *inspector) diagnosisView(c *ui.Context) {
 	result := s.quick.value
 	verdict := firstValue(result.Verdict, "UNKNOWN")
-	card(c.Key("diagnosis")).Padding(20).Radius(24).Gap(16).Gradient(c.Theme().Surface, c.Theme().Background, 180).Children(func() {
+	quickCard(c.Key("diagnosis")).
+		Padding(16).Radius(24).Gap(12).Gradient(c.Theme().Surface, c.Theme().Background, 180).Children(func() {
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(16).Children(func() {
 			ui.Column(c).Grow(1).Gap(4).Children(func() {
 				label(c, firstValue(result.Target, "未提供目标")).FontSize(21).Bold().Wrap()
@@ -174,9 +175,7 @@ func (s *inspector) diagnosisView(c *ui.Context) {
 			})
 			verdictBadge(c, verdict, statusLabel(result))
 		})
-		width, _ := c.Size()
-		columns := max(2, min(6, int((width-260-48-40+14)/194)))
-		ui.Column(c).FillWidth().Grid().Columns(columns).Gap(14).Children(func() {
+		ui.Column(c).FillWidth().Grid().Columns(4).Gap(10).Children(func() {
 			fields := []struct{ name, value string }{
 				{"规则类型", result.RuleType}, {"规则内容", result.RulePayload},
 				{"策略组", result.Policy}, {"最终节点", result.FinalProxy},
@@ -187,7 +186,7 @@ func (s *inspector) diagnosisView(c *ui.Context) {
 				fields[6].value = strconv.Itoa(result.DstPort)
 			}
 			for _, field := range fields {
-				ui.Column(c).FillWidth().Gap(6).Children(func() {
+				ui.Column(c).FillWidth().MinWidth(0).Gap(4).Children(func() {
 					label(c, field.name).TextColor(c.Theme().TextMuted)
 					label(c, fallback(field.value)).FillWidth().Bold().Wrap().Selectable()
 				})
@@ -204,7 +203,7 @@ func (s *inspector) diagnosisView(c *ui.Context) {
 		if s.evidenceOpen {
 			caption = "▾ 原始证据"
 		}
-		if button(c.Key("evidence-toggle"), caption, false).Label("原始证据").Clicked() {
+		if button(c.Key("evidence-toggle"), caption, false).AlignSelf(ui.Start).Label("原始证据").Clicked() {
 			s.evidenceOpen = !s.evidenceOpen
 		}
 		if s.evidenceOpen {

@@ -43,7 +43,7 @@ func ruleLabel(kind, payload string) string {
 	}
 }
 
-func verdictBadge(c *ui.Context, verdict, value string) {
+func verdictBadge(c *ui.Context, verdict, value string) ui.Element {
 	color := ui.Hex("#64748b")
 	switch verdict {
 	case "DIRECT":
@@ -53,7 +53,7 @@ func verdictBadge(c *ui.Context, verdict, value string) {
 	case "REJECT":
 		color = ui.Hex("#dc2626")
 	}
-	label(c, value).MinWidth(82).Padding(7, 11).TextAlign(ui.Center).
+	return label(c, value).MinWidth(82).Padding(7, 11).TextAlign(ui.Center).
 		Bold().TextColor(ui.Hex("#ffffff")).Background(color).Radius(999)
 }
 
@@ -61,13 +61,13 @@ func divider(c *ui.Context) {
 	ui.Row(c).FillWidth().Height(1).Background(c.Theme().Border)
 }
 
-func tableRow(c *ui.Context, values []string, widths []float32, width float32, header bool, verdict ...string) {
-	ui.Column(c).FillWidth().Children(func() {
+func tableRow(c *ui.Context, values []string, widths []float32, width float32, header bool, verdict ...string) ui.Element {
+	return ui.Column(c).FillWidth().Children(func() {
 		ui.Row(c).FillWidth().Children(func() {
 			for i, value := range values {
 				if i == 1 && len(verdict) > 0 {
 					ui.Column(c).Width(width*widths[i]).Shrink(0).Padding(8, 10).AlignItems(ui.Start).Children(func() {
-						verdictBadge(c, verdict[0], value)
+						verdictBadge(c, verdict[0], value).MaxWidth(width*widths[i] - 20).Wrap()
 					})
 					continue
 				}

@@ -106,5 +106,27 @@ func TestNativeSmoke(t *testing.T) {
 		if !tester.HasText(tc.want) {
 			t.Fatalf("%s: missing %q in %q", tc.tab, tc.want, tester.Texts())
 		}
+		if tc.tab == "设置" {
+			var previous ui.Rect
+			for _, name := range []string{
+				"Controller 模式", "HTTP Controller 地址", "Windows Pipe 名称", "Secret",
+				"Mixed Proxy 地址", "默认超时 (ms)", "配置文件路径", "当前 Controller",
+			} {
+				row, ok := tester.Find(name)
+				if !ok || row.Y < previous.Y+previous.H {
+					t.Fatalf("settings field %q does not have its own row: %v after %v", name, row, previous)
+				}
+				previous = row
+			}
+		}
+	}
+	if !tester.HasText("规则类型/内容") {
+		t.Fatal("history does not show the diagnosis table")
+	}
+	if err := tester.Click("example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if !app.quick.ready || app.quick.value.NormalizedHost != "example.com" {
+		t.Fatal("history row did not open the diagnosis")
 	}
 }
