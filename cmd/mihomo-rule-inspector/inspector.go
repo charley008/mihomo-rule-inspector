@@ -42,6 +42,8 @@ type inspector struct {
 	history                                                []probe.Diagnosis
 	connectionsUpdated                                     time.Time
 	evidenceOpen                                           bool
+	lightMode                                              bool
+	themePath, themeStatus                                 string
 }
 
 type task[T any] struct {
@@ -81,6 +83,7 @@ func newInspector(ctx context.Context, cfg config.AppConfig) *inspector {
 		historyPath: filepath.Join(filepath.Dir(path), "history.json"),
 	}
 	s.logConfig.Store(&cfg)
+	s.loadTheme(path)
 	s.logs = server.NewLogCollector(func() config.AppConfig { return *s.logConfig.Load() })
 	if data, err := os.ReadFile(s.historyPath); err == nil {
 		if err := json.Unmarshal(data, &s.history); err != nil {
@@ -163,11 +166,11 @@ func details(c *ui.Context, value string, height float32) {
 func (s *inspector) diagnosisView(c *ui.Context) {
 	result := s.quick.value
 	verdict := firstValue(result.Verdict, "UNKNOWN")
-	card(c.Key("diagnosis")).Padding(20).Radius(24).Gap(16).Gradient(soft, background, 180).Children(func() {
+	card(c.Key("diagnosis")).Padding(20).Radius(24).Gap(16).Gradient(c.Theme().Surface, c.Theme().Background, 180).Children(func() {
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(16).Children(func() {
 			ui.Column(c).Grow(1).Gap(4).Children(func() {
 				label(c, firstValue(result.Target, "未提供目标")).FontSize(21).Bold().Wrap()
-				label(c, fallback(result.NormalizedHost)).TextColor(muted).Selectable()
+				label(c, fallback(result.NormalizedHost)).TextColor(c.Theme().TextMuted).Selectable()
 			})
 			verdictBadge(c, verdict, statusLabel(result))
 		})
@@ -185,14 +188,14 @@ func (s *inspector) diagnosisView(c *ui.Context) {
 			}
 			for _, field := range fields {
 				ui.Column(c).FillWidth().Gap(6).Children(func() {
-					label(c, field.name).TextColor(muted)
+					label(c, field.name).TextColor(c.Theme().TextMuted)
 					label(c, fallback(field.value)).FillWidth().Bold().Wrap().Selectable()
 				})
 			}
 		})
 		if result.Error != "" {
-			label(c, result.Error).FillWidth().Padding(9, 11).FontSize(14).TextColor(ui.Hex("#fecaca")).
-				Background(ui.Hex("#38191d")).Radius(12).Wrap().Selectable()
+			label(c, result.Error).FillWidth().Padding(9, 11).FontSize(14).TextColor(palette(c).errorText).
+				Background(palette(c).errorFill).Radius(12).Wrap().Selectable()
 		}
 		for _, suggestion := range result.Suggestions {
 			hint(c, suggestion)

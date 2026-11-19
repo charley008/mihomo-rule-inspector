@@ -70,9 +70,30 @@ func TestNativeSmoke(t *testing.T) {
 	app.rules.value, app.rules.ready = rules, true
 	app.connections.value, app.connections.ready = connections, true
 	app.nextConnection = time.Now().Add(time.Minute)
+	app.lightMode = false
+	app.themePath = filepath.Join(t.TempDir(), "theme.txt")
 	tester := ui.NewTester(app.view, 950, 640)
 	if !tester.HasText(appVersion) {
 		t.Fatalf("missing application version %q", appVersion)
+	}
+	dark := tester.Image().RGBAAt(4, 600)
+	if err := tester.Click("浅色模式"); err != nil {
+		t.Fatal(err)
+	}
+	light := tester.Image().RGBAAt(4, 600)
+	if !app.lightMode || !tester.HasText("深色模式") || light.R <= dark.R {
+		t.Fatal("light theme did not apply")
+	}
+	reloaded := &inspector{}
+	reloaded.loadTheme(filepath.Join(filepath.Dir(app.themePath), "config.json"))
+	if !reloaded.lightMode {
+		t.Fatal("light theme preference was not saved")
+	}
+	if err := tester.Click("深色模式"); err != nil {
+		t.Fatal(err)
+	}
+	if app.lightMode || !tester.HasText("浅色模式") {
+		t.Fatal("dark theme did not apply")
 	}
 	for _, tc := range []struct{ tab, want string }{
 		{"批量检测", "最终节点"}, {"实时连接", "当前 1 条连接"},

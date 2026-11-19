@@ -32,7 +32,7 @@ func (s *inspector) quickView(c *ui.Context) {
 		ui.Row(c).FillWidth().Gap(14).AlignItems(ui.Center).Children(func() {
 			cacheOption(c.Key("dns"), &s.clearDNS, "检测前清理 DNS cache")
 			cacheOption(c.Key("fake-ip"), &s.clearFakeIP, "检测前清理 fake-ip cache")
-			label(c, "超时\n(ms)").Width(40).TextColor(muted)
+			label(c, "超时\n(ms)").Width(40).TextColor(c.Theme().TextMuted)
 			input(c, &s.timeout).Label("探测超时（毫秒）").Width(208)
 		})
 		taskStatus(c, &s.quick, "正在检测，请稍候…")
@@ -52,12 +52,12 @@ func (s *inspector) quickView(c *ui.Context) {
 			hint(c, s.historyStatus)
 		}
 		if len(s.history) == 0 {
-			label(c, "暂无历史记录").TextColor(muted)
+			label(c, "暂无历史记录").TextColor(c.Theme().TextMuted)
 		}
 		for i, item := range s.history {
 			host := firstValue(item.NormalizedHost, item.Target)
 			history := ui.ButtonBase(c.Key(i)).Label(host).FillWidth().Disabled(s.quick.busy).
-				Background(ui.Hex("#141f29")).Border(1, outline).Radius(12).Padding(9, 13).
+				Background(palette(c).history).Border(1, c.Theme().Border).Radius(12).Padding(9, 13).
 				Children(func() {
 					ui.Column(c).FillWidth().Gap(6).Children(func() {
 						ui.Row(c).FillWidth().Gap(12).Children(func() {
@@ -65,9 +65,9 @@ func (s *inspector) quickView(c *ui.Context) {
 							verdictBadge(c, item.Verdict, statusLabel(item))
 						})
 						ui.Row(c).FillWidth().Gap(12).Children(func() {
-							label(c, ruleLabel(item.RuleType, item.RulePayload)).FontSize(12).TextColor(muted).Grow(1).Wrap()
-							label(c, fallback(firstValue(item.FinalProxy, item.Policy))).FontSize(12).TextColor(muted).Grow(1).TextAlign(ui.Center).Wrap()
-							label(c, fmt.Sprintf("%d ms", item.DurationMs)).FontSize(12).TextColor(muted).Grow(1).TextAlign(ui.End)
+							label(c, ruleLabel(item.RuleType, item.RulePayload)).FontSize(12).TextColor(c.Theme().TextMuted).Grow(1).Wrap()
+							label(c, fallback(firstValue(item.FinalProxy, item.Policy))).FontSize(12).TextColor(c.Theme().TextMuted).Grow(1).TextAlign(ui.Center).Wrap()
+							label(c, fmt.Sprintf("%d ms", item.DurationMs)).FontSize(12).TextColor(c.Theme().TextMuted).Grow(1).TextAlign(ui.End)
 						})
 					})
 				})
@@ -89,7 +89,7 @@ func cacheOption(c *ui.Context, checked *bool, caption string) {
 		ui.Row(c).Grow(1).Justify(ui.Center).Children(func() {
 			ui.Checkbox(c, checked, "").Label(caption)
 		})
-		label(c, caption).Width(80).TextColor(muted).Wrap().OnClick(func() {
+		label(c, caption).Width(80).TextColor(c.Theme().TextMuted).Wrap().OnClick(func() {
 			*checked = !*checked
 		})
 	})
@@ -99,7 +99,7 @@ func (s *inspector) batchView(c *ui.Context) {
 	card(c.Key("batch-form")).Children(func() {
 		label(c, "目标列表")
 		ui.TextArea(c, &s.batchTargets).FillWidth().Height(220).Label("批量目标").Placeholder("一行一个域名").
-			FontSize(15).TextColor(foreground).Background(fieldBackground).Border(1, outline).Radius(12).Padding(10, 11)
+			FontSize(15).TextColor(c.Theme().Text).Background(palette(c).input).Border(1, c.Theme().Border).Radius(12).Padding(10, 11)
 		ui.Row(c).Gap(12).Children(func() {
 			if button(c, "开始批量检测", true).Disabled(s.batch.busy).Clicked() {
 				req := s.probeRequest()
@@ -299,7 +299,7 @@ func (s *inspector) logsView(c *ui.Context) {
 	})
 	c.After(time.Second)
 	filter := strings.ToLower(strings.TrimSpace(s.logFilter))
-	ui.Column(c.Key("log-view")).FillWidth().Padding(11).Radius(12).Background(sidebar).Border(1, outline).Children(func() {
+	ui.Column(c.Key("log-view")).FillWidth().Padding(11).Radius(12).Background(palette(c).sidebar).Border(1, c.Theme().Border).Children(func() {
 		for _, line := range s.logs.Snapshot(300) {
 			if strings.Contains(strings.ToLower(line), filter) {
 				logLine(c, line)
@@ -309,11 +309,11 @@ func (s *inspector) logsView(c *ui.Context) {
 }
 
 func logLine(c *ui.Context, line string) {
-	ui.RichText(c).FillWidth().FontSize(14).TextColor(foreground).Wrap().Selectable().Children(func() {
+	ui.RichText(c).FillWidth().FontSize(14).TextColor(c.Theme().Text).Wrap().Selectable().Children(func() {
 		pos := 0
 		for _, match := range logKeywords.FindAllStringIndex(line, -1) {
 			ui.Text(c, line[pos:match[0]])
-			ui.Text(c, line[match[0]:match[1]]).TextColor(ui.Hex("#fde68a")).Background(ui.Hex("#3e3217")).Radius(4)
+			ui.Text(c, line[match[0]:match[1]]).TextColor(palette(c).highlightText).Background(palette(c).highlight).Radius(4)
 			pos = match[1]
 		}
 		ui.Text(c, line[pos:])
@@ -360,7 +360,7 @@ func (s *inspector) rulesView(c *ui.Context) {
 				}
 				matches[index] = field(item, "matchType")
 				label(c, fmt.Sprintf("#%d %s %s (%s)", index, field(item, "type"), field(item, "payload"), matches[index])).
-					Padding(5, 9).FontSize(13).TextColor(ui.Hex("#bfdbfe")).Background(ui.Hex("#152a47")).Radius(999)
+					Padding(5, 9).FontSize(13).TextColor(palette(c).detailText).Background(palette(c).chip).Radius(999)
 			}
 		})
 		width := tableWidth(c)
@@ -385,8 +385,8 @@ func (s *inspector) settingsView(c *ui.Context) {
 			ui.Row(c.Key("mode")).MinWidth(0).Gap(8).AlignItems(ui.Center).Children(func() {
 				label(c, "Controller 模式").Width(70).Wrap()
 				if ui.Select(c, &mode, []string{"HTTP Controller", "Windows Pipe"}).Label("Controller 模式").
-					Grow(1).MinWidth(0).Height(40).Radius(12).Background(fieldBackground).Border(1, outline).
-					FontSize(15).TextColor(foreground).Changed() {
+					Grow(1).MinWidth(0).Height(40).Radius(12).Background(palette(c).input).Border(1, c.Theme().Border).
+					FontSize(15).TextColor(c.Theme().Text).Changed() {
 					cfg.ControllerMode = config.ControllerModeHTTP
 					if mode == "Windows Pipe" {
 						cfg.ControllerMode = config.ControllerModeWindowsPipe
@@ -398,8 +398,8 @@ func (s *inspector) settingsView(c *ui.Context) {
 			settingsInput(c.Key("secret"), "Secret", &cfg.Secret, 43, true)
 			settingsInput(c.Key("proxy"), "Mixed Proxy 地址", &cfg.MixedProxyURL, 74, false)
 			settingsInput(c.Key("timeout"), "默认超时 (ms)", &s.cfgTimeout, 64, false)
-			ui.Checkbox(c, &cfg.ClearDNSCacheBeforeProbe, "默认检测前清理 DNS cache").FontSize(15).TextColor(foreground).AlignSelf(ui.Center)
-			ui.Checkbox(c, &cfg.ClearFakeIPCacheBeforeProbe, "默认检测前清理 fake-ip cache").FontSize(15).TextColor(foreground).AlignSelf(ui.Center)
+			ui.Checkbox(c, &cfg.ClearDNSCacheBeforeProbe, "默认检测前清理 DNS cache").FontSize(15).TextColor(c.Theme().Text).AlignSelf(ui.Center)
+			ui.Checkbox(c, &cfg.ClearFakeIPCacheBeforeProbe, "默认检测前清理 fake-ip cache").FontSize(15).TextColor(c.Theme().Text).AlignSelf(ui.Center)
 			settingsBox(c.Key("config-path"), "配置文件路径", s.configPath)
 			var controller mihomo.ControllerInfo
 			if s.health.err == nil {
@@ -425,7 +425,7 @@ func (s *inspector) settingsView(c *ui.Context) {
 			case s.health.ready:
 				status = "连接失败。\n" + jsonText(s.health.value["errors"])
 			}
-			label(c, status).FillWidth().FillHeight().Padding(9, 11).Background(soft).Radius(12).FontSize(14).TextColor(muted).Wrap().Selectable()
+			label(c, status).FillWidth().FillHeight().Padding(9, 11).Background(c.Theme().Surface).Radius(12).FontSize(14).TextColor(c.Theme().TextMuted).Wrap().Selectable()
 		})
 		if s.settingsStatus != "" {
 			hint(c, s.settingsStatus)
@@ -444,9 +444,9 @@ func settingsInput(c *ui.Context, name string, value *string, labelWidth float32
 }
 
 func settingsBox(c *ui.Context, title, value string) {
-	ui.Column(c).FillWidth().MinWidth(0).Padding(12).Gap(6).Background(fieldBackground).Border(1, outline).Radius(12).Children(func() {
+	ui.Column(c).FillWidth().MinWidth(0).Padding(12).Gap(6).Background(palette(c).input).Border(1, c.Theme().Border).Radius(12).Children(func() {
 		label(c, title).Bold()
-		label(c, value).FillWidth().Wrap().Selectable().Font("Consolas").TextColor(ui.Hex("#bfdbfe"))
+		label(c, value).FillWidth().Wrap().Selectable().Font("Consolas").TextColor(palette(c).detailText)
 	})
 }
 
