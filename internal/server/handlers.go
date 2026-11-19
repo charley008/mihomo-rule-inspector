@@ -3,173 +3,82 @@ package server
 import (
 	"context"
 	"fmt"
-	"net/http"
-	"strconv"
 	"strings"
 	"time"
-
-	"github.com/gorilla/websocket"
 
 	"mihomo-rule-inspector/internal/config"
 	"mihomo-rule-inspector/internal/mihomo"
 	"mihomo-rule-inspector/internal/probe"
 )
 
-func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		cfg := s.currentConfig()
-		configPath, _ := config.Path()
-		s.writeJSON(w, http.StatusOK, map[string]any{
-			"controllerMode":              cfg.ControllerMode,
-			"controllerUrl":               cfg.ControllerURL,
-			"controllerPipe":              cfg.ControllerPipe,
-			"secret":                      cfg.Secret,
-			"mixedProxyUrl":               cfg.MixedProxyURL,
-			"timeoutMs":                   cfg.TimeoutMs,
-			"clearDnsCacheBeforeProbe":    cfg.ClearDNSCacheBeforeProbe,
-			"clearFakeIpCacheBeforeProbe": cfg.ClearFakeIPCacheBeforeProbe,
-			"configPath":                  configPath,
-		})
-	case http.MethodPost:
-		var cfg config.AppConfig
-		if err := s.decodeJSON(r, &cfg); err != nil {
-			s.writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
-			return
-		}
-		cfg.ControllerMode = strings.TrimSpace(cfg.ControllerMode)
-		cfg.ControllerURL = strings.TrimSpace(cfg.ControllerURL)
-		cfg.ControllerPipe = strings.TrimSpace(cfg.ControllerPipe)
-		cfg.MixedProxyURL = strings.TrimSpace(cfg.MixedProxyURL)
-		if err := s.updateConfig(cfg); err != nil {
-			s.writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
-			return
-		}
-		configPath, _ := config.Path()
-		s.writeJSON(w, http.StatusOK, map[string]any{
-			"controllerMode":              cfg.ControllerMode,
-			"controllerUrl":               cfg.ControllerURL,
-			"controllerPipe":              cfg.ControllerPipe,
-			"secret":                      cfg.Secret,
-			"mixedProxyUrl":               cfg.MixedProxyURL,
-			"timeoutMs":                   cfg.TimeoutMs,
-			"clearDnsCacheBeforeProbe":    cfg.ClearDNSCacheBeforeProbe,
-			"clearFakeIpCacheBeforeProbe": cfg.ClearFakeIPCacheBeforeProbe,
-			"configPath":                  configPath,
-		})
-	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
-	}
-}
-
-func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	detection, err := mihomo.DetectController(s.currentConfig())
+func CheckController(ctx context.Context, cfg config.AppConfig) (map[string]any, error) {
+	client, err := mihomo.NewClient(cfg)
 	if err != nil {
-		s.writeJSON(w, http.StatusOK, map[string]any{
-			"ok":         false,
-			"error":      err.Error(),
-			"controller": detection.Info,
-			"attempts":   detection.Attempts,
-		})
-		return
+		return nil, err
 	}
-
-	client, err := mihomo.NewClient(s.currentConfig())
-	if err != nil {
-		s.writeJSON(w, http.StatusOK, map[string]any{
-			"ok":         false,
-			"error":      err.Error(),
-			"controller": detection.Info,
-			"attempts":   detection.Attempts,
-		})
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
-
 	version, versionErr := client.GetVersion(ctx)
-	configs, configsErr := client.GetConfigs(ctx)
-	ok := versionErr == nil && configsErr == nil
-
-	s.writeJSON(w, http.StatusOK, map[string]any{
-		"ok":         ok,
-		"version":    version,
-		"configs":    configs,
+	_, configsErr := client.GetConfigs(ctx)
+	result := map[string]any{
 		"controller": client.Info(),
-		"attempts":   detection.Attempts,
-		"errors": map[string]string{
-			"version": errString(versionErr),
-			"configs": errString(configsErr),
-		},
-	})
+		"attempts":   client.Attempts(),
+		"version":    version,
+		"ok":         versionErr == nil && configsErr == nil,
+	}
+	if versionErr != nil || configsErr != nil {
+		result["errors"] = map[string]string{"version": errString(versionErr), "configs": errString(configsErr)}
+	}
+	return result, nil
 }
 
-func (s *Server) handleProbe(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req probe.ProbeRequest
-	if err := s.decodeJSON(r, &req); err != nil {
-		s.writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
-		return
-	}
-
-	service, err := probe.NewService(s.currentConfig())
+func BatchProbe(ctx context.Context, cfg config.AppConfig, req probe.BatchProbeRequest) ([]probe.Diagnosis, error) {
+	service, err := probe.NewService(cfg)
 	if err != nil {
-		s.writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
-		return
+		return nil, err
 	}
-
-	result, err := service.Run(r.Context(), req)
-	if err != nil {
-		s.writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
-		return
-	}
-	s.writeJSON(w, http.StatusOK, result)
-}
-
-func (s *Server) handleBatchProbe(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req probe.BatchProbeRequest
-	if err := s.decodeJSON(r, &req); err != nil {
-		s.writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
-		return
-	}
-
-	service, err := probe.NewService(s.currentConfig())
-	if err != nil {
-		s.writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
-		return
-	}
-
 	results := make([]probe.Diagnosis, 0, len(req.Targets))
 	for _, target := range req.Targets {
+		if ctx.Err() != nil {
+			return results, ctx.Err()
+		}
 		target = strings.TrimSpace(target)
 		if target == "" {
 			continue
 		}
-		item := runBatchProbeItem(r.Context(), service, probe.ProbeRequest{
-			Target:           target,
-			ClearDNSCache:    req.ClearDNSCache,
-			ClearFakeIPCache: req.ClearFakeIPCache,
-			TimeoutMs:        req.TimeoutMs,
+		item := runBatchProbeItem(ctx, service, probe.ProbeRequest{
+			Target: target, ClearDNSCache: req.ClearDNSCache,
+			ClearFakeIPCache: req.ClearFakeIPCache, TimeoutMs: req.TimeoutMs,
 		})
 		results = append(results, item)
 	}
-
-	s.writeJSON(w, http.StatusOK, map[string]any{
-		"results":     results,
-		"concurrency": 1,
-	})
+	return results, nil
 }
 
+type RulesResult struct {
+	Rules         map[string]any
+	Providers     map[string]any
+	Candidates    []map[string]any
+	Target        string
+	RulesError    string
+	ProviderError string
+}
+
+func Rules(ctx context.Context, cfg config.AppConfig, target string) (RulesResult, error) {
+	client, err := mihomo.NewClient(cfg)
+	if err != nil {
+		return RulesResult{}, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	rules, rulesErr := client.GetRules(ctx)
+	providers, providersErr := client.GetRuleProviders(ctx)
+	host, _ := probe.NormalizeTarget(target)
+	return RulesResult{
+		Rules: rules, Providers: providers, Candidates: weakMatchCandidates(host, rules), Target: host,
+		RulesError: errString(rulesErr), ProviderError: errString(providersErr),
+	}, nil
+}
 func runBatchProbeItem(ctx context.Context, service *probe.Service, req probe.ProbeRequest) probe.Diagnosis {
 	const maxAttempts = 5
 
@@ -215,157 +124,6 @@ func runBatchProbeItem(ctx context.Context, service *probe.Service, req probe.Pr
 		)
 	}
 	return last
-}
-
-func (s *Server) handleRules(w http.ResponseWriter, r *http.Request) {
-	client, err := mihomo.NewClient(s.currentConfig())
-	if err != nil {
-		s.writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-	defer cancel()
-	rules, rulesErr := client.GetRules(ctx)
-	providers, providersErr := client.GetRuleProviders(ctx)
-	host, _ := probe.NormalizeTarget(r.URL.Query().Get("target"))
-
-	s.writeJSON(w, http.StatusOK, map[string]any{
-		"rules":         rules,
-		"providers":     providers,
-		"candidates":    weakMatchCandidates(host, rules),
-		"target":        host,
-		"rulesError":    errString(rulesErr),
-		"providerError": errString(providersErr),
-	})
-}
-
-func (s *Server) handleConnections(w http.ResponseWriter, r *http.Request) {
-	client, err := mihomo.NewClient(s.currentConfig())
-	if err != nil {
-		s.writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-	defer cancel()
-	snapshot, err := client.GetConnections(ctx)
-	if err != nil {
-		s.writeJSON(w, http.StatusBadGateway, map[string]any{"error": err.Error()})
-		return
-	}
-	s.writeJSON(w, http.StatusOK, snapshot)
-}
-
-func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
-	limit := 300
-	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
-		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
-			limit = parsed
-		}
-	}
-
-	lines := []string{}
-	if s.logs != nil {
-		lines = s.logs.Snapshot(limit)
-	}
-
-	s.writeJSON(w, http.StatusOK, map[string]any{
-		"logs": lines,
-	})
-}
-
-func (s *Server) handleLogsWS(w http.ResponseWriter, r *http.Request) {
-	downstream, client, ctx, cleanup, ok := s.prepareWS(w, r)
-	if !ok {
-		return
-	}
-	defer cleanup()
-
-	upstream, err := client.OpenLogsStream(ctx, "info")
-	if err == nil {
-		defer upstream.Close()
-		proxyBidirectionalWS(downstream, upstream)
-		return
-	}
-
-	_ = downstream.WriteJSON(map[string]any{
-		"error": fmt.Sprintf("日志 WebSocket 不可用：%v", err),
-	})
-}
-
-func (s *Server) handleConnectionsWS(w http.ResponseWriter, r *http.Request) {
-	downstream, client, ctx, cleanup, ok := s.prepareWS(w, r)
-	if !ok {
-		return
-	}
-	defer cleanup()
-
-	upstream, err := client.OpenConnectionsStream(ctx)
-	if err == nil {
-		defer upstream.Close()
-		proxyBidirectionalWS(downstream, upstream)
-		return
-	}
-
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-	for {
-		snapshot, fetchErr := client.GetConnections(ctx)
-		if fetchErr != nil {
-			_ = downstream.WriteJSON(map[string]any{"error": fetchErr.Error()})
-		} else {
-			_ = downstream.WriteJSON(snapshot)
-		}
-
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		}
-	}
-}
-
-func (s *Server) prepareWS(w http.ResponseWriter, r *http.Request) (*websocket.Conn, *mihomo.Client, context.Context, func(), bool) {
-	client, err := mihomo.NewClient(s.currentConfig())
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return nil, nil, nil, nil, false
-	}
-
-	downstream, err := s.upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		return nil, nil, nil, nil, false
-	}
-
-	ctx, cancel := context.WithCancel(r.Context())
-	cleanup := func() {
-		cancel()
-		_ = downstream.Close()
-	}
-
-	return downstream, client, ctx, cleanup, true
-}
-
-func proxyBidirectionalWS(downstream, upstream *websocket.Conn) {
-	errCh := make(chan error, 2)
-	go copyWS(errCh, upstream, downstream)
-	go copyWS(errCh, downstream, upstream)
-	<-errCh
-}
-
-func copyWS(errCh chan<- error, src, dst *websocket.Conn) {
-	for {
-		messageType, payload, err := src.ReadMessage()
-		if err != nil {
-			errCh <- err
-			return
-		}
-		if err := dst.WriteMessage(messageType, payload); err != nil {
-			errCh <- err
-			return
-		}
-	}
 }
 
 func weakMatchCandidates(host string, rules map[string]any) []map[string]any {

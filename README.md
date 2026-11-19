@@ -2,9 +2,8 @@
 
 `mihomo-rule-inspector` 是一个用 Go 编写的本地桌面诊断工具，用来确认某个域名在 `mihomo`  内核里实际命中了哪条规则、哪个策略组、最终走哪个节点。
 
-当前版本定位为 Windows 64 位便携桌面工具，界面使用 Wails 承载，前端仍然是普通 HTML/CSS/JavaScript，并通过 `go:embed` 内嵌进单个 Go 可执行文件。
+这是 Windows 64 位便携桌面工具。界面由 [MyGO Native UI](https://github.com/egoist/mygo) 直接绘制，窗口、表单、列表和保存对话框都由 Go 代码创建，运行无需 WebView2。
 
-这是桌面窗口程序，不再提供单独的本地浏览器监听模式。
 
 ## 功能简介
 
@@ -25,13 +24,12 @@
 4. 在探测窗口内同时收集 `/connections` 和 `/logs?level=info`
 5. 优先使用 `/connections` 中的 `rule / rulePayload / chains`
 6. 日志只作为辅助证据展示，不再参与最终规则判断
-7. 返回结构化诊断结果，供前端卡片和表格展示
+7. 返回结构化诊断结果，供原生界面展示
 
 ## 技术栈
 
-- 后端：Go 1.23+
-- 桌面壳：Wails v2
-- 前端：原生 HTML / CSS / JavaScript
+- Go 1.27.3 或更高版本
+- 桌面界面：MyGO Native UI v0.10.0
 - Mihomo 通信：HTTP API + WebSocket
 - Windows Pipe：`github.com/Microsoft/go-winio`
 - 图标资源：Go 生成 `.ico`，并通过 Windows 资源文件编入 exe
@@ -40,7 +38,7 @@
 
 源码和运行产物分开：
 
-- `cmd/`、`internal/`、`web/`：源码
+- `cmd/`、`internal/`：源码
 - `dist/`：编译输出目录
 - `dist/data/`：便携模式运行数据目录，可放 `config.json`
 
@@ -50,7 +48,6 @@
 mihomo-rule-inspector/
   cmd/
   internal/
-  web/
   dist/
     mihomo-rule-inspector.exe
     data/
@@ -72,7 +69,7 @@ mihomo-rule-inspector/
 
 ## Controller 模式
 
-工具支持三种 controller 模式：
+工具支持两种 controller 模式：
 
 - `http`
 - `windows_pipe`
@@ -98,7 +95,7 @@ external-controller-pipe: \\.\pipe\verge-mihomo
 ## 特性
 
 - 单执行文件运行，启动后直接弹出桌面窗口
-- 后端直接请求 Mihomo controller API，避免浏览器 CORS 问题
+- Go 代码直接请求 Mihomo controller API
 - 使用 Go 原生 `net/http`，强制经由 Mihomo `mixed-port` 发起探测
 - 优先读取 `/connections` 的 `rule`、`rulePayload`、`chains`
 - 日志只保留为辅助排障证据，不再用于最终命中判断
@@ -106,9 +103,8 @@ external-controller-pipe: \\.\pipe\verge-mihomo
 
 ## 依赖
 
-- Go 1.23+
+- Go 1.27.3 或更高版本
 - Mihomo Meta 分支内核
-- Windows 下建议安装 Microsoft WebView2 Runtime
 
 ## Mihomo 配置要求
 
@@ -121,23 +117,13 @@ external-controller-pipe: \\.\pipe\verge-mihomo
 
 ## 构建
 
-推荐直接输出到 `dist/`：
-
-```bash
-go build -tags desktop,production -ldflags="-w -s -H windowsgui" -o dist/mihomo-rule-inspector.exe ./cmd/mihomo-rule-inspector
-```
-
-如果你想在 Windows 下隐藏控制台窗口，可以使用：
+在 PowerShell 中构建 Windows 便携版：
 
 ```powershell
-go build -tags desktop,production -ldflags="-w -s -H windowsgui" -o dist\mihomo-rule-inspector.exe ./cmd/mihomo-rule-inspector
+go build -ldflags="-w -s -H windowsgui" -o dist/mihomo-rule-inspector.exe ./cmd/mihomo-rule-inspector
 ```
 
-对于 Wails 桌面版，Windows 构建请始终保留：
-
-- `-tags desktop,production`
-
-否则运行时会出现 “Wails applications will not build without the correct build tags” 报错。
+运行 `dist/mihomo-rule-inspector.exe`。如果用新版替换原目录下的旧版 exe，程序会沿用该目录下的 `data/config.json`。原生版的快速检测历史保存在 `data/history.json`，旧版 WebView2 的历史记录仍保存在原浏览器存储里。
 
 ## 页面说明
 
@@ -171,19 +157,6 @@ go build -tags desktop,production -ldflags="-w -s -H windowsgui" -o dist\mihomo-
 - 调用 `/rules` 和 `/providers/rules`
 - 对 `DOMAIN`、`DOMAIN-SUFFIX`、`DOMAIN-KEYWORD`、`DOMAIN-WILDCARD`、`DOMAIN-REGEX`、`MATCH` 做弱匹配提示
 - 最终实际命中结果只以 `/connections` 为准
-
-## 后端 API
-
-- `GET /api/config`
-- `POST /api/config`
-- `GET /api/health`
-- `POST /api/probe`
-- `POST /api/batch-probe`
-- `GET /api/rules`
-- `GET /api/connections`
-- `GET /api/logs`
-- `GET /api/logs/ws`
-- `GET /api/connections/ws`
 
 ## 说明
 - 如果目标站请求失败，只要 Mihomo 产生了连接，工具仍会尽量给出规则判断。

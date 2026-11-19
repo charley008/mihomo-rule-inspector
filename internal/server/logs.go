@@ -49,6 +49,12 @@ func (c *LogCollector) Stop() {
 	}
 }
 
+func (c *LogCollector) Clear() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.lines = nil
+}
+
 func (c *LogCollector) Snapshot(limit int) []string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -90,7 +96,9 @@ func (c *LogCollector) run(ctx context.Context) {
 			continue
 		}
 
+		stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
 		c.readLoop(ctx, conn)
+		stop()
 		_ = conn.Close()
 
 		if !sleepOrDone(ctx, 1500*time.Millisecond) {

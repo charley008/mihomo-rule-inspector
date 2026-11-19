@@ -25,7 +25,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
-          go build -tags desktop,production -ldflags="-w -s -H windowsgui" -o dist\mihomo-rule-inspector.exe .\cmd\mihomo-rule-inspector
+          go build -ldflags="-w -s -H windowsgui" -o dist\mihomo-rule-inspector.exe .\cmd\mihomo-rule-inspector
 
       - name: Package Release
         shell: pwsh
